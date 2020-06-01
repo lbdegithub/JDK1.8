@@ -170,6 +170,7 @@ public class CountDownLatch {
         }
 
         protected int tryAcquireShared(int acquires) {
+            // 在调用await后，（构造传入的count不等于0时）调用线程立马进入队列阻塞 之到有线程调用countDown
             return (getState() == 0) ? 1 : -1;
         }
 
@@ -180,6 +181,7 @@ public class CountDownLatch {
                 if (c == 0)
                     return false;
                 int nextc = c-1;
+                // 利用自旋 处理status--
                 if (compareAndSetState(c, nextc))
                     return nextc == 0;
             }
@@ -189,6 +191,7 @@ public class CountDownLatch {
     private final Sync sync;
 
     /**
+     * 构造时传入，可控的线程数。不可以小于0 ，0不会对线程有任何控制
      * Constructs a {@code CountDownLatch} initialized with the given count.
      *
      * @param count the number of times {@link #countDown} must be invoked
@@ -288,6 +291,7 @@ public class CountDownLatch {
      * <p>If the current count equals zero then nothing happens.
      */
     public void countDown() {
+        // 释放共享资源 count -1  当count减到0时，就会传播的唤醒阻塞队列中的node
         sync.releaseShared(1);
     }
 

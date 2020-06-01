@@ -694,11 +694,13 @@ public abstract class AbstractQueuedSynchronizer
          */
         for (;;) {
             Node h = head;
+            // 判断 队列中存在等待接节点
             if (h != null && h != tail) {
                 int ws = h.waitStatus;
                 if (ws == Node.SIGNAL) {
                     if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
                         continue;            // loop to recheck cases
+                    // 唤醒线程
                     unparkSuccessor(h);
                 }
                 else if (ws == 0 &&
@@ -739,8 +741,10 @@ public abstract class AbstractQueuedSynchronizer
          */
         if (propagate > 0 || h == null || h.waitStatus < 0 ||
             (h = head) == null || h.waitStatus < 0) {
+            //
             Node s = node.next;
             if (s == null || s.isShared())
+                // 调用 唤醒逻辑doReleaseShared  唤醒下一个node
                 doReleaseShared();
         }
     }
@@ -1002,22 +1006,27 @@ public abstract class AbstractQueuedSynchronizer
      */
     private void doAcquireSharedInterruptibly(int arg)
         throws InterruptedException {
+        // 构建共享节点 加入列表
         final Node node = addWaiter(Node.SHARED);
         boolean failed = true;
         try {
             for (;;) {
                 final Node p = node.predecessor();
                 if (p == head) {
+                    // 尝试获取资源
                     int r = tryAcquireShared(arg);
                     if (r >= 0) {
+                        // 获取成功 设置head 并设置下一个节点传播状态
                         setHeadAndPropagate(node, r);
                         p.next = null; // help GC
                         failed = false;
                         return;
                     }
                 }
+
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt())
+                    // 共享模式不可以被阻断 抛异常
                     throw new InterruptedException();
             }
         } finally {
@@ -1321,6 +1330,10 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
+     * <p>
+     *     以共享模式获取，如果中断则中止。通过首先检查中断状态，然后至少调用一次tryAcquireShared来实现，并在成功后返回。
+     *     否则，线程将排队，并可能反复阻塞和解除阻塞，调用tryAcquireShared直到成功或线程被中断
+     * </p>
      * Acquires in shared mode, aborting if interrupted.  Implemented
      * by first checking interrupt status, then invoking at least once
      * {@link #tryAcquireShared}, returning on success.  Otherwise the
@@ -1335,9 +1348,12 @@ public abstract class AbstractQueuedSynchronizer
      */
     public final void acquireSharedInterruptibly(int arg)
             throws InterruptedException {
+        // 被中断就抛出异常
         if (Thread.interrupted())
             throw new InterruptedException();
+        // 尝试获取共享资源（共享模式）
         if (tryAcquireShared(arg) < 0)
+            // 尝试获取失败
             doAcquireSharedInterruptibly(arg);
     }
 
@@ -1375,7 +1391,9 @@ public abstract class AbstractQueuedSynchronizer
      * @return the value returned from {@link #tryReleaseShared}
      */
     public final boolean releaseShared(int arg) {
+        // 尝试释放资源
         if (tryReleaseShared(arg)) {
+            // （完全）释放的逻辑
             doReleaseShared();
             return true;
         }
