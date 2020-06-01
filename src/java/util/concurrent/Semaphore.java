@@ -248,6 +248,8 @@ public class Semaphore implements java.io.Serializable {
                 int remaining = available - acquires;
                 if (remaining < 0 ||
                     compareAndSetState(available, remaining))
+                    //返回当前aqs的status 当返回负数时-1，表明构造时的初始大小，已经被线程分享完，当前线程需要进入阻塞队列。
+                    // 即保证正在执行的线程数永远数<=初始化容量的
                     return remaining;
             }
         }
