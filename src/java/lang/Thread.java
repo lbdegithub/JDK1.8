@@ -873,6 +873,8 @@ class Thread implements Runnable {
     }
 
     /**
+     *
+     * 将调用该方法的对象所表示的线程标记一个停止标记，并不是真的停止该线程。
      * Interrupts this thread.
      *
      * <p> Unless the current thread is interrupting itself, which is
@@ -927,6 +929,11 @@ class Thread implements Runnable {
     }
 
     /**
+     * <h3>获取当前线程的中断状态，并且会清除线程的状态标记。是一个是静态方法。</h3>
+     * <p>
+     * 测试当前线程是否已被中断。通过此方法可以清除线程的中断状态。换句话说，如果要连续调用此方法两次，
+     * 则第二次调用将返回false（除非当前线程在第一次调用清除其中断状态之后且在第二次调用检查其状态之前再次中断）。
+     * 由于此方法返回false，因此将反映线程中断，因为该线程在中断时尚未处于活动状态而被忽略
      * Tests whether the current thread has been interrupted.  The
      * <i>interrupted status</i> of the thread is cleared by this method.  In
      * other words, if this method were to be called twice in succession, the
@@ -948,6 +955,7 @@ class Thread implements Runnable {
     }
 
     /**
+     * 获取调用该方法的对象所表示的线程，不会清除线程的状态标记。是一个实例方法 。
      * Tests whether this thread has been interrupted.  The <i>interrupted
      * status</i> of the thread is unaffected by this method.
      *

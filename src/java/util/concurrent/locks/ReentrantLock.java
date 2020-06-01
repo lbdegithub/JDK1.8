@@ -129,12 +129,14 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         final boolean nonfairTryAcquire(int acquires) {
             final Thread current = Thread.currentThread();
             int c = getState();
+            // 如果当前资源，没有被抢占，就再一次的尝试cas抢占，成功就返回。
             if (c == 0) {
                 if (compareAndSetState(0, acquires)) {
                     setExclusiveOwnerThread(current);
                     return true;
                 }
             }
+            // 判断资源的独占线程，是否是重入 ，是就设置重入次数 即status++
             else if (current == getExclusiveOwnerThread()) {
                 int nextc = c + acquires;
                 if (nextc < 0) // overflow
@@ -146,11 +148,13 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         }
 
         protected final boolean tryRelease(int releases) {
+            // aqs中的status-- 操作
             int c = getState() - releases;
             if (Thread.currentThread() != getExclusiveOwnerThread())
                 throw new IllegalMonitorStateException();
             boolean free = false;
             if (c == 0) {
+                // 完全释放了（重入的情况要依次--）
                 free = true;
                 setExclusiveOwnerThread(null);
             }
@@ -199,13 +203,17 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         private static final long serialVersionUID = 7316153563782823691L;
 
         /**
+         * 非公平锁：线程在访问共享资源时，直接尝试抢占锁
          * Performs lock.  Try immediate barge, backing up to normal
          * acquire on failure.
          */
         final void lock() {
+            // 抢占资源  替换aqs中的status 从0(无锁)-->1(加锁)
             if (compareAndSetState(0, 1))
+                // 抢占成功，替换独占线程exclusiveOwnerThread为当前线程
                 setExclusiveOwnerThread(Thread.currentThread());
             else
+                // 尝试获取，失败就排队
                 acquire(1);
         }
 
@@ -221,6 +229,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         private static final long serialVersionUID = -3000897897090466540L;
 
         final void lock() {
+            // 公平锁 到资源的边界，不会立马尝试抢占，而是先判断链表
             acquire(1);
         }
 
@@ -232,12 +241,15 @@ public class ReentrantLock implements Lock, java.io.Serializable {
             final Thread current = Thread.currentThread();
             int c = getState();
             if (c == 0) {
+                // 链表中存在节点就返回false,直接进入列表的逻辑
                 if (!hasQueuedPredecessors() &&
+                        // 无抢占节点，直接抢占
                     compareAndSetState(0, acquires)) {
                     setExclusiveOwnerThread(current);
                     return true;
                 }
             }
+            // 重入逻辑
             else if (current == getExclusiveOwnerThread()) {
                 int nextc = c + acquires;
                 if (nextc < 0)
