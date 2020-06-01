@@ -1698,6 +1698,7 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
+     * 将节点从条件队列转移到同步队列
      * Transfers a node from a condition queue onto sync queue.
      * Returns true if successful.
      * @param node the node
@@ -1708,6 +1709,7 @@ public abstract class AbstractQueuedSynchronizer
         /*
          * If cannot change waitStatus, the node has been cancelled.
          */
+        // 改变节点的状态
         if (!compareAndSetWaitStatus(node, Node.CONDITION, 0))
             return false;
 
@@ -1717,9 +1719,11 @@ public abstract class AbstractQueuedSynchronizer
          * attempt to set waitStatus fails, wake up to resync (in which
          * case the waitStatus can be transiently and harmlessly wrong).
          */
+        // 加入aqs的同步阻塞队列
         Node p = enq(node);
         int ws = p.waitStatus;
         if (ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL))
+            //如果该节点被取消，或者设置SIGNAL失败，则直接唤醒当前node节点的线程，使其可以继续执行自己下面的代码逻辑
             LockSupport.unpark(node.thread);
         return true;
     }
@@ -1732,6 +1736,7 @@ public abstract class AbstractQueuedSynchronizer
      * @return true if cancelled before the node was signalled
      */
     final boolean transferAfterCancelledWait(Node node) {
+        // 被阻断之后，转化成aqs的lock类型的同步队列
         if (compareAndSetWaitStatus(node, Node.CONDITION, 0)) {
             enq(node);
             return true;
@@ -1757,6 +1762,7 @@ public abstract class AbstractQueuedSynchronizer
         boolean failed = true;
         try {
             int savedState = getState();
+            // 释放整个status （status-status）并唤醒处于lock队列的下一个node
             if (release(savedState)) {
                 failed = false;
                 return savedState;
@@ -1765,6 +1771,7 @@ public abstract class AbstractQueuedSynchronizer
             }
         } finally {
             if (failed)
+                // 释放失败就取消当前节点，由下一轮操作去移除
                 node.waitStatus = Node.CANCELLED;
         }
     }
@@ -1889,7 +1896,9 @@ public abstract class AbstractQueuedSynchronizer
                 unlinkCancelledWaiters();
                 t = lastWaiter;
             }
+            // 构建CONDITION模式的节点
             Node node = new Node(Thread.currentThread(), Node.CONDITION);
+            // 加入链表的尾部
             if (t == null)
                 firstWaiter = node;
             else
@@ -1906,9 +1915,11 @@ public abstract class AbstractQueuedSynchronizer
          */
         private void doSignal(Node first) {
             do {
+                // 把当前头节点移除condition队列
                 if ( (firstWaiter = first.nextWaiter) == null)
                     lastWaiter = null;
                 first.nextWaiter = null;
+                // 将节点从条件队列转移到同步队列 失败就沿着链表向下执行
             } while (!transferForSignal(first) &&
                      (first = firstWaiter) != null);
         }
@@ -1928,6 +1939,7 @@ public abstract class AbstractQueuedSynchronizer
         }
 
         /**
+         * 从条件队列中取消取消的服务者节点的链接
          * Unlinks cancelled waiter nodes from condition queue.
          * Called only while holding lock. This is called when
          * cancellation occurred during condition wait, and upon
@@ -1964,6 +1976,7 @@ public abstract class AbstractQueuedSynchronizer
         // public methods
 
         /**
+         * 将等待时间最长的线程（如果存在）从该条件的等待队列移至拥有锁的等待队列。
          * Moves the longest-waiting thread, if one exists, from the
          * wait queue for this condition to the wait queue for the
          * owning lock.
@@ -1972,8 +1985,10 @@ public abstract class AbstractQueuedSynchronizer
          *         returns {@code false}
          */
         public final void signal() {
+            // 当前线程是否是抢占成功的线程
             if (!isHeldExclusively())
                 throw new IllegalMonitorStateException();
+            // 唤醒处于condition队列的头节点
             Node first = firstWaiter;
             if (first != null)
                 doSignal(first);
@@ -2025,9 +2040,9 @@ public abstract class AbstractQueuedSynchronizer
          * interrupted while blocked waiting to re-acquire.
          */
 
-        /** Mode meaning to reinterrupt on exit from wait */
+        /** Mode meaning to reinterrupt on exit from wait 在等待退出时重新中断 */
         private static final int REINTERRUPT =  1;
-        /** Mode meaning to throw InterruptedException on exit from wait */
+        /** Mode meaning to throw InterruptedException on exit from wait  在等待退出时抛出InterruptedException*/
         private static final int THROW_IE    = -1;
 
         /**
@@ -2037,6 +2052,7 @@ public abstract class AbstractQueuedSynchronizer
          */
         private int checkInterruptWhileWaiting(Node node) {
             return Thread.interrupted() ?
+                    // 如果是被阻断唤醒的 同样要加入aqs的阻塞队列中
                 (transferAfterCancelledWait(node) ? THROW_IE : REINTERRUPT) :
                 0;
         }
@@ -2054,6 +2070,7 @@ public abstract class AbstractQueuedSynchronizer
         }
 
         /**
+         * 实现中断等待 原理同Object#wait
          * Implements interruptible condition wait.
          * <ol>
          * <li> If current thread is interrupted, throw InterruptedException.
@@ -2069,14 +2086,21 @@ public abstract class AbstractQueuedSynchronizer
         public final void await() throws InterruptedException {
             if (Thread.interrupted())
                 throw new InterruptedException();
+            // 新增一个等待节点 加入链表队列 不同与lock中的队列，次队列是单向队列
             Node node = addConditionWaiter();
+            // 调用await 就是把当前线程挂起，所以需要释放（全部释放，考虑到重入的情况）并唤醒下一个lock队列的节点
+            // 返回的是当前线程重入的次数
             int savedState = fullyRelease(node);
             int interruptMode = 0;
+            // 判断当前node是否是aqs中的lock阻塞队列的节点
             while (!isOnSyncQueue(node)) {
+                // 阻塞
                 LockSupport.park(this);
+                // park 会被unpack唤醒，同样在被阻断Interrupt或者未知异常时也会被唤醒
                 if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
                     break;
             }
+            // 当被唤醒之后的逻辑。加入aqs阻塞队列
             if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
                 interruptMode = REINTERRUPT;
             if (node.nextWaiter != null) // clean up if cancelled
