@@ -93,10 +93,10 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     /** The queued items */
     final Object[] items;
 
-    /** items index for next take, poll, peek or remove */
+    /** items index for next take, poll, peek or remove get 的游标 */
     int takeIndex;
 
-    /** items index for next put, offer, or add */
+    /** items index for next put, offer, or add  put的游标*/
     int putIndex;
 
     /** Number of elements in the queue */
@@ -162,6 +162,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         if (++putIndex == items.length)
             putIndex = 0;
         count++;
+        // 唤醒get的线程
         notEmpty.signal();
     }
 
@@ -181,6 +182,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         count--;
         if (itrs != null)
             itrs.elementDequeued();
+        // 唤醒put线程
         notFull.signal();
         return x;
     }
@@ -347,10 +349,14 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     public void put(E e) throws InterruptedException {
         checkNotNull(e);
         final ReentrantLock lock = this.lock;
+        // 不准阻断的排它模式
         lock.lockInterruptibly();
         try {
             while (count == items.length)
+                // put操作阻塞
                 notFull.await();
+
+            //put逻辑 入队
             enqueue(e);
         } finally {
             lock.unlock();
@@ -400,7 +406,9 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         lock.lockInterruptibly();
         try {
             while (count == 0)
+                // 获取阻塞
                 notEmpty.await();
+            // 出队
             return dequeue();
         } finally {
             lock.unlock();

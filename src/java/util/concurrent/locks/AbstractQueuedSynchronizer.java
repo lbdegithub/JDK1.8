@@ -1259,6 +1259,7 @@ public abstract class AbstractQueuedSynchronizer
      */
     public final void acquireInterruptibly(int arg)
             throws InterruptedException {
+        // 不准阻断的排它模式
         if (Thread.interrupted())
             throw new InterruptedException();
         if (!tryAcquire(arg))
