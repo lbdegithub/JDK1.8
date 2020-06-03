@@ -264,6 +264,9 @@ class Thread implements Runnable {
     public static native Thread currentThread();
 
     /**
+     * 给调度程序的提示是当前线程愿意放弃当前使用的处理器。调度程序可以随意忽略此提示。
+     * 线程让步，把自己CPU执行的时间让掉。
+     * 让自己或者其它的线程运行,让当前线程由“运行状态”进入到“就绪状态”
      * A hint to the scheduler that the current thread is willing to yield
      * its current use of a processor. The scheduler is free to ignore this
      * hint.

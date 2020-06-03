@@ -954,7 +954,7 @@ public class ThreadLocalRandom extends Random {
 
     // Within-package utilities
 
-    /*
+    /**
      * Descriptions of the usages of the methods below can be found in
      * the classes that use them. Briefly, a thread's "probe" value is
      * a non-zero hash code that (probably) does not collide with
@@ -969,9 +969,9 @@ public class ThreadLocalRandom extends Random {
      *
      * Note: Because of package-protection issues, versions of some
      * these methods also appear in some subpackage classes.
-     */
 
-    /**
+     * 从给定的Java变量中获取一个值。更具体地说，从给定对象o中以给定偏移量或（如果o为空）从数值为给定偏移量的内存地址中获取字段或数组元素
+     * 个人理解是 每个线程返回不同的值，可以保证线程之间不会冲突，即使冲突也可以使用随机等策略保证。
      * Returns the probe value for the current thread without forcing
      * initialization. Note that invoking ThreadLocalRandom.current()
      * can be used to force initialization on zero return.
