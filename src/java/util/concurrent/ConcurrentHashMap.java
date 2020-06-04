@@ -563,6 +563,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     static final int MIN_TREEIFY_CAPACITY = 64;
 
     /**
+     * 每个线程负责扩容的(默认)最小容量。可以根据map的容量和运行环境的cpu数调整
      * Minimum number of rebinnings per transfer step. Ranges are
      * subdivided to allow multiple resizer threads.  This value
      * serves as a lower bound to avoid resizers encountering
@@ -2328,6 +2329,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                 int rs = resizeStamp(n);
                 // sc < 0 表示已经有线程正在扩容
                 if (sc < 0) {
+                    // nextTable是在transfer内部进行赋值的 volatile 满足可见性的
                     //这5个条件只要有一个条件为true，说明当前线程不能帮助进行此次的扩容，直接跳出循环
                     // sc >>> RESIZE_STAMP_SHIFT!=rs 表示比较高RESIZE_STAMP_BITS位生成戳和rs是否相等，
                     // sc=rs+1表示扩容结束  ，sc==rs+MAX_RESIZERS 表示帮助线程线程已经达到最大值了
@@ -2338,6 +2340,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                         break;
                     // cas 修改SIZECTL 表示扩容线程+1 成功就可以辅助扩容
                     if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1))
+                        // 参数 扩容之前的数据结构；待扩容之后的数据结构
                         transfer(tab, nt);
                 }
                 // cas 成功表示可以开始扩容
@@ -2359,15 +2362,24 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      */
     final Node<K,V>[] helpTransfer(Node<K,V>[] tab, Node<K,V> f) {
         Node<K,V>[] nextTab; int sc;
+        // 判断此时是否仍然在执行扩容,nextTab=null 的时候说明扩容已经结束了
         if (tab != null && (f instanceof ForwardingNode) &&
             (nextTab = ((ForwardingNode<K,V>)f).nextTable) != null) {
             int rs = resizeStamp(tab.length);
+            //说明扩容还未完成的情况下不断循环来尝试将当前 线程加入到扩容操作中
             while (nextTab == nextTable && table == tab &&
                    (sc = sizeCtl) < 0) {
+                //下面部分的整个代码表示扩容结束，直接退出循环
+                //transferIndex<=0 表示所有的 Node 都已经分配了线程
+                //sc=rs+MAX_RESIZERS 表示扩容线程数达到最大扩容线程数
+                //sc >>> RESIZE_STAMP_SHIFT !=rs， 如果在同一轮扩容中，那么 sc 无符号
+                // 右移比较高位和 rs 的值，那么应该是相等的。如果不相等，说明扩容结束了
+                //sc==rs+1 表示扩容结束
                 if ((sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 ||
                     sc == rs + MAX_RESIZERS || transferIndex <= 0)
                     break;
                 if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1)) {
+                    // 辅助扩容
                     transfer(tab, nextTab);
                     break;
                 }
@@ -2429,9 +2441,11 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      */
     private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
         int n = tab.length, stride;
+        // 计算每个线程负责扩容的容量大小  stride
         if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) < MIN_TRANSFER_STRIDE)
             stride = MIN_TRANSFER_STRIDE; // subdivide range
         if (nextTab == null) {            // initiating
+            // 无线程辅助 自己扩 成倍扩容
             try {
                 @SuppressWarnings("unchecked")
                 Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n << 1];
@@ -2440,53 +2454,73 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                 sizeCtl = Integer.MAX_VALUE;
                 return;
             }
+            // 扩容之后的数据结构
             nextTable = nextTab;
+            // 数据迁移的索引 从后向前迁移
             transferIndex = n;
         }
+        // 扩容之后的容量
         int nextn = nextTab.length;
+        // 用来标记已经迁移过的节点 ForwardingNode继承Node
         ForwardingNode<K,V> fwd = new ForwardingNode<K,V>(nextTab);
         boolean advance = true;
         boolean finishing = false; // to ensure sweep before committing nextTab
+        // 从最后一个槽位开始迁移，循环中针对每个槽位进行迁移
         for (int i = 0, bound = 0;;) {
             Node<K,V> f; int fh;
             while (advance) {
+                // 这里的循环是为了确定当前线程负责的区域
                 int nextIndex, nextBound;
                 if (--i >= bound || finishing)
                     advance = false;
+                // 扩容之后的所有槽位都已经分配完毕
                 else if ((nextIndex = transferIndex) <= 0) {
                     i = -1;
                     advance = false;
                 }
+                // cas加自旋的方式 对线程负责的迁移区域进行划分，主要是通过下标标注每个线程负责的区域
+                // (nextBound,nextIndex)
                 else if (U.compareAndSwapInt
                          (this, TRANSFERINDEX, nextIndex,
                           nextBound = (nextIndex > stride ?
                                        nextIndex - stride : 0))) {
+                    // 当前线程负责迁移的边界位置
                     bound = nextBound;
+                    // 当前线程负责迁移的下标
                     i = nextIndex - 1;
                     advance = false;
                 }
             }
+            // i<0说明已经遍历完旧的数组，也就是当前线程已经处理完所有负责的bucket
             if (i < 0 || i >= n || i + n >= nextn) {
                 int sc;
                 if (finishing) {
                     nextTable = null;
                     table = nextTab;
+                    // 下一步的扩容临界值
                     sizeCtl = (n << 1) - (n >>> 1);
                     return;
                 }
+                // CAS 操作对 sizeCtl 的低 16 位进行减 1，代表做完了属于自己的任务
                 if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
+                    // 如果不相等 返回 进入调用者的下一次循环 继续
                     if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT)
                         return;
+                    // 如果相等，扩容结束了，更新 finising 变量
                     finishing = advance = true;
                     i = n; // recheck before commit
                 }
             }
+            // 如果位置 i 处是空的，没有任何节点，那么放入刚刚初始化的 ForwardingNode ”空节点“
             else if ((f = tabAt(tab, i)) == null)
                 advance = casTabAt(tab, i, null, fwd);
             else if ((fh = f.hash) == MOVED)
+                //表示该位置已经完成了迁移，也就是如果线程 A 已经处理过这个节点，那么线程 B 处理这个节点时，hash 值一定为 MOVED
                 advance = true; // already processed
             else {
+                // 真正的迁移逻辑
                 synchronized (f) {
+                    // 多次检查当前节点的数据是否发生变化
                     if (tabAt(tab, i) == f) {
                         Node<K,V> ln, hn;
                         if (fh >= 0) {
@@ -2494,31 +2528,44 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                             Node<K,V> lastRun = f;
                             for (Node<K,V> p = f.next; p != null; p = p.next) {
                                 int b = p.hash & n;
+                                //寻找（需要迁移/不要迁移）节点类别的最终连续节点的 开始位置  eg. : 1->2->3->4->5->6->7->8 其中 2 4 678要迁移 那么lastRun=6对对应的节点
                                 if (b != runBit) {
                                     runBit = b;
                                     lastRun = p;
                                 }
                             }
                             if (runBit == 0) {
+                                // 低位 lastRun代表的不要迁移
                                 ln = lastRun;
                                 hn = null;
                             }
                             else {
+                                // 高位 lastRun代表的需要迁移
                                 hn = lastRun;
                                 ln = null;
                             }
+                            // 前面的寻找lastRun精妙之处就是在下面拼接高低链表时 减少循环的次数
+                            // 同样是上面的例子 最终ln 是 5->3->1  hn是 4->2->6->7->8  其中的6->7->8就不用再次循环
                             for (Node<K,V> p = f; p != lastRun; p = p.next) {
                                 int ph = p.hash; K pk = p.key; V pv = p.val;
+                                // ==0 表示是低位 扩容后位置不变 如果ph&n==0 那么ph&(n<<1) 也是0
                                 if ((ph & n) == 0)
+                                    // 低位链表
                                     ln = new Node<K,V>(ph, pk, pv, ln);
                                 else
+                                    // 需要迁移的高位的链表
                                     hn = new Node<K,V>(ph, pk, pv, hn);
                             }
+                            // i是当前槽位 i+n是当前槽位对应扩容后的对其槽位
+                            // ln低位保持在原来的位置
                             setTabAt(nextTab, i, ln);
+                            // hn高位迁移至扩容之后的对其位置
                             setTabAt(nextTab, i + n, hn);
+                            // 标记当前槽位已经被处理过了
                             setTabAt(tab, i, fwd);
                             advance = true;
                         }
+                        // 红黑树的迁移逻辑
                         else if (f instanceof TreeBin) {
                             TreeBin<K,V> t = (TreeBin<K,V>)f;
                             TreeNode<K,V> lo = null, loTail = null;
