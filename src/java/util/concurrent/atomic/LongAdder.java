@@ -83,7 +83,7 @@ public class LongAdder extends Striped64 implements Serializable {
 
     /**
      * Adds the given value.
-     *
+     * LB-TODO look
      * @param x the value to add
      */
     public void add(long x) {
