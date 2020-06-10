@@ -2299,7 +2299,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      */
     private final void addCount(long x, int check) {
         CounterCell[] as; long b, s;
-        // 当counterCells不为空时，表示在addCount时已经存在竞争了 或者通过cas设置baseCount+失败也表示存在线程竞争
+        // 当counterCells不为空时，表示在addCount时已经存在竞争了 直接进入{}，或者通过cas设置baseCount+失败也表示存在线程竞争
         if ((as = counterCells) != null ||
             !U.compareAndSwapLong(this, BASECOUNT, b = baseCount, s = b + x)) {
             CounterCell a; long v; int m;
@@ -2312,9 +2312,12 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                 !(uncontended = U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x))) {
                 // 处理CounterCell逻辑 存在竞争的逻辑
                 fullAddCount(x, uncontended);
+                // 个人理解：进入fullAddCount 表示存在竞争，即竞争失败的线程进入fullAddCount处理对应的逻辑，
+                // 前提是有一个线程竞争成功，就保证已经有一个线程向下进行了，就是判断扩容的逻辑。所以此处可以直接返回。
                 return;
             }
             if (check <= 1)
+                // 表示节点内容替换，并非增加。
                 return;
             // 总长度
             s = sumCount();
