@@ -157,9 +157,12 @@ public class ThreadLocal<T> {
      * @return the current thread's value of this thread-local
      */
     public T get() {
+        // 当前线程
         Thread t = Thread.currentThread();
+        // 获取当前线程的成员 ThreadLocalMap
         ThreadLocalMap map = getMap(t);
         if (map != null) {
+            // 获取缓存中的数据
             ThreadLocalMap.Entry e = map.getEntry(this);
             if (e != null) {
                 @SuppressWarnings("unchecked")
@@ -167,6 +170,7 @@ public class ThreadLocal<T> {
                 return result;
             }
         }
+        // 初始化
         return setInitialValue();
     }
 
@@ -183,6 +187,7 @@ public class ThreadLocal<T> {
         if (map != null)
             map.set(this, value);
         else
+            // 初始化
             createMap(t, value);
         return value;
     }
@@ -237,8 +242,8 @@ public class ThreadLocal<T> {
      * Create the map associated with a ThreadLocal. Overridden in
      * InheritableThreadLocal.
      *
-     * @param t the current thread
-     * @param firstValue value for the initial entry of the map
+     * @param t the current thread 当前线程
+     * @param firstValue value for the initial entry of the map 需要缓存的值
      */
     void createMap(Thread t, T firstValue) {
         t.threadLocals = new ThreadLocalMap(this, firstValue);
@@ -361,12 +366,15 @@ public class ThreadLocal<T> {
          * Construct a new map initially containing (firstKey, firstValue).
          * ThreadLocalMaps are constructed lazily, so we only create
          * one when we have at least one entry to put in it.
+         * @param firstKey  当前线程
+         * @param firstValue 需要缓存的值
          */
         ThreadLocalMap(ThreadLocal<?> firstKey, Object firstValue) {
             table = new Entry[INITIAL_CAPACITY];
             int i = firstKey.threadLocalHashCode & (INITIAL_CAPACITY - 1);
             table[i] = new Entry(firstKey, firstValue);
             size = 1;
+            // 设置扩容临界值
             setThreshold(INITIAL_CAPACITY);
         }
 
@@ -460,18 +468,20 @@ public class ThreadLocal<T> {
 
             Entry[] tab = table;
             int len = tab.length;
+            // 根据哈希码和数组长度求元素放置的位置，即数组下标
             int i = key.threadLocalHashCode & (len-1);
-
+            //从i开始往后一直遍历到数组下一个不为null的Entry(线性探索)
             for (Entry e = tab[i];
                  e != null;
                  e = tab[i = nextIndex(i, len)]) {
                 ThreadLocal<?> k = e.get();
 
+                //如果key相等，覆盖value
                 if (k == key) {
                     e.value = value;
                     return;
                 }
-
+                //如果key为null,用新key、value覆盖，同时清理历史key=null的陈旧数据(弱引用)
                 if (k == null) {
                     replaceStaleEntry(key, value, i);
                     return;
@@ -480,6 +490,7 @@ public class ThreadLocal<T> {
 
             tab[i] = new Entry(key, value);
             int sz = ++size;
+            //如果超过阀值，就需要扩容了
             if (!cleanSomeSlots(i, sz) && sz >= threshold)
                 rehash();
         }
@@ -532,10 +543,12 @@ public class ThreadLocal<T> {
                  (e = tab[i]) != null;
                  i = prevIndex(i, len))
                 if (e.get() == null)
+                    // 向前查询最近的一个槽位为空的下标
                     slotToExpunge = i;
 
             // Find either the key or trailing null slot of run, whichever
             // occurs first
+            //向下遍历查找 至到最近的一个槽位非空的节点
             for (int i = nextIndex(staleSlot, len);
                  (e = tab[i]) != null;
                  i = nextIndex(i, len)) {
@@ -549,12 +562,14 @@ public class ThreadLocal<T> {
                 if (k == key) {
                     e.value = value;
 
+                    //与无效的sloat进行交换
                     tab[i] = tab[staleSlot];
                     tab[staleSlot] = e;
 
                     // Start expunge at preceding stale entry if it exists
                     if (slotToExpunge == staleSlot)
                         slotToExpunge = i;
+                    // 清除
                     cleanSomeSlots(expungeStaleEntry(slotToExpunge), len);
                     return;
                 }
@@ -562,12 +577,14 @@ public class ThreadLocal<T> {
                 // If we didn't find stale entry on backward scan, the
                 // first stale entry seen while scanning for key is the
                 // first still present in the run.
+                //如果当前的slot已经无效，并且向前扫描过程中没有无效slot，则更新slotToExpunge为当前位置
                 if (k == null && slotToExpunge == staleSlot)
                     slotToExpunge = i;
             }
 
             // If key not found, put new entry in stale slot
             tab[staleSlot].value = null;
+            // 没找到 当前槽位赋值
             tab[staleSlot] = new Entry(key, value);
 
             // If there are any other stale entries in run, expunge them
