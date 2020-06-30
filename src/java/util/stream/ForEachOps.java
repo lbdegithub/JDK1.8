@@ -60,10 +60,10 @@ final class ForEachOps {
     /**
      * Constructs a {@code TerminalOp} that perform an action for every element
      * of a stream.
-     *
+     * 构造一个TerminalOp，对流的每个元素执行一个动作。
      * @param action the {@code Consumer} that receives all elements of a
-     *        stream
-     * @param ordered whether an ordered traversal is requested
+     *        stream 接受所有元素的流操作
+     * @param ordered whether an ordered traversal is requested 是否有序遍历
      * @param <T> the type of the stream elements
      * @return the {@code TerminalOp} instance
      */
@@ -155,6 +155,7 @@ final class ForEachOps {
         public <S> Void evaluateParallel(PipelineHelper<T> helper,
                                          Spliterator<S> spliterator) {
             if (ordered)
+                // ForkJoinTask执行
                 new ForEachOrderedTask<>(helper, spliterator, this).invoke();
             else
                 new ForEachTask<>(helper, spliterator, helper.wrapSink(this)).invoke();

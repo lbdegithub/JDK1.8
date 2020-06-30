@@ -61,11 +61,13 @@ public final class StreamSupport {
      * @param spliterator a {@code Spliterator} describing the stream elements
      * @param parallel if {@code true} then the returned stream is a parallel
      *        stream; if {@code false} the returned stream is a sequential
-     *        stream.
+     *        stream. 顺序流还是并行流的判断
      * @return a new sequential or parallel {@code Stream}
      */
     public static <T> Stream<T> stream(Spliterator<T> spliterator, boolean parallel) {
         Objects.requireNonNull(spliterator);
+        // collect -->IteratorSpliterator false
+        // 返回一个起始流 Head
         return new ReferencePipeline.Head<>(spliterator,
                                             StreamOpFlag.fromCharacteristics(spliterator),
                                             parallel);

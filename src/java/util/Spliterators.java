@@ -398,6 +398,8 @@ public final class Spliterators {
     // Iterator-based spliterators
 
     /**
+     * 使用给定集合的Collection.iterator（）作为元素源，并报告其Collection.size（）作为其初始大小，创建一个拆分器。
+     * 分离器是后期绑定的，继承了集合的迭代器的快速失败属性，并实现了trySplit以允许有限的并行性
      * Creates a {@code Spliterator} using the given collection's
      * {@link java.util.Collection#iterator()} as the source of elements, and
      * reporting its {@link java.util.Collection#size()} as its initial size.
@@ -417,6 +419,7 @@ public final class Spliterators {
      */
     public static <T> Spliterator<T> spliterator(Collection<? extends T> c,
                                                  int characteristics) {
+        // 构造拆分器
         return new IteratorSpliterator<>(Objects.requireNonNull(c),
                                          characteristics);
     }

@@ -382,6 +382,7 @@ final class SortedOps {
             list = (size >= 0) ? new ArrayList<T>((int) size) : new ArrayList<T>();
         }
 
+        // 最终排序
         @Override
         public void end() {
             list.sort(comparator);

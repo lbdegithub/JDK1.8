@@ -159,10 +159,13 @@ abstract class ReferencePipeline<P_IN, P_OUT>
     @Override
     public final Stream<P_OUT> filter(Predicate<? super P_OUT> predicate) {
         Objects.requireNonNull(predicate);
+        // 构造中间无状态流
         return new StatelessOp<P_OUT, P_OUT>(this, StreamShape.REFERENCE,
                                      StreamOpFlag.NOT_SIZED) {
+            // 返回由回调函数包装而成Sink
             @Override
             Sink<P_OUT> opWrapSink(int flags, Sink<P_OUT> sink) {
+                // 使用当前Sink包装的回调函数mapper处理u
                 return new Sink.ChainedReference<P_OUT, P_OUT>(sink) {
                     @Override
                     public void begin(long size) {
@@ -171,7 +174,9 @@ abstract class ReferencePipeline<P_IN, P_OUT>
 
                     @Override
                     public void accept(P_OUT u) {
+                        // 过滤
                         if (predicate.test(u))
+                            // 将处理结果传递给流水线下游的Sink
                             downstream.accept(u);
                     }
                 };
@@ -531,7 +536,7 @@ abstract class ReferencePipeline<P_IN, P_OUT>
 
     /**
      * Source stage of a ReferencePipeline.
-     *
+     *  起始流
      * @param <E_IN> type of elements in the upstream source
      * @param <E_OUT> type of elements in produced by this stage
      * @since 1.8
@@ -553,9 +558,10 @@ abstract class ReferencePipeline<P_IN, P_OUT>
         /**
          * Constructor for the source stage of a Stream.
          *
-         * @param source {@code Spliterator} describing the stream source
+         * @param source {@code Spliterator} describing the stream source 流的资源
          * @param sourceFlags the source flags for the stream source, described
          *                    in {@link StreamOpFlag}
+         * @param parallel true并行流 false顺序流
          */
         Head(Spliterator<?> source,
              int sourceFlags, boolean parallel) {
@@ -596,6 +602,7 @@ abstract class ReferencePipeline<P_IN, P_OUT>
     }
 
     /**
+     * Stream的无状态中间阶段的基类。中间流
      * Base class for a stateless intermediate stage of a Stream.
      *
      * @param <E_IN> type of elements in the upstream source
@@ -608,9 +615,9 @@ abstract class ReferencePipeline<P_IN, P_OUT>
          * Construct a new Stream by appending a stateless intermediate
          * operation to an existing stream.
          *
-         * @param upstream The upstream pipeline stage
-         * @param inputShape The stream shape for the upstream pipeline stage
-         * @param opFlags Operation flags for the new stage
+         * @param upstream The upstream pipeline stage  上游管道阶段
+         * @param inputShape The stream shape for the upstream pipeline stage 上游管道阶段的流形
+         * @param opFlags Operation flags for the new stage  新阶段的操作标志
          */
         StatelessOp(AbstractPipeline<?, E_IN, ?> upstream,
                     StreamShape inputShape,
@@ -626,6 +633,7 @@ abstract class ReferencePipeline<P_IN, P_OUT>
     }
 
     /**
+     * Stream的有状态中间阶段的基类。中间流
      * Base class for a stateful intermediate stage of a Stream.
      *
      * @param <E_IN> type of elements in the upstream source

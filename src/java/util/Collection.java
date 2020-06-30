@@ -578,6 +578,7 @@ public interface Collection<E> extends Iterable<E> {
      * @since 1.8
      */
     default Stream<E> stream() {
+        //返回以此集合为源的顺序Stream。
         return StreamSupport.stream(spliterator(), false);
     }
 
